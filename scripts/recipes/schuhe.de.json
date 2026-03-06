@@ -1,0 +1,87 @@
+{
+  "domain": "schuhe.de",
+  "loginType": "email_password",
+  "loginUrl": "https://www.schuhe.de/login",
+  "steps": [
+    {
+      "type": "goto",
+      "selector": "https://www.schuhe.de/login",
+      "description": "Navigate to schuhe.de login page"
+    },
+    {
+      "type": "sleep",
+      "timeout": 4000,
+      "description": "Wait for CMP cookie overlay"
+    },
+    {
+      "type": "jsClick",
+      "selector": "a.cmpboxbtnyes",
+      "optional": true,
+      "description": "Dismiss CMP cookie consent"
+    },
+    {
+      "type": "sleep",
+      "timeout": 2000,
+      "description": "Wait for overlay to close"
+    },
+    {
+      "type": "jsFill",
+      "value": "{{email}}",
+      "selector": "input#email",
+      "description": "Fill email"
+    },
+    {
+      "type": "jsFill",
+      "value": "{{password}}",
+      "selector": "input#password",
+      "description": "Fill password"
+    },
+    {
+      "type": "jsClick",
+      "selector": "button[type='submit']",
+      "value": "Anmelden",
+      "description": "Click Anmelden button"
+    },
+    {
+      "type": "sleep",
+      "timeout": 8000,
+      "description": "Wait for login redirect"
+    },
+    {
+      "type": "goto",
+      "selector": "https://www.schuhe.de/account",
+      "description": "Navigate to account page (triggers Frontastic cart/getOrders API)"
+    },
+    {
+      "type": "sleep",
+      "timeout": 6000,
+      "description": "Wait for orders API response"
+    },
+    {
+      "type": "apiExtract",
+      "description": "Extract orders from Frontastic API response (intercepted)"
+    }
+  ],
+  "extractionRules": {"orderId": "", "status": ""},
+  "statusMapping": {
+    "Complete": "delivered",
+    "Open": "processing",
+    "Confirmed": "processing",
+    "Cancelled": "cancelled"
+  },
+  "apiExtractConfig": {
+    "ordersApiPattern": "cart/getOrders",
+    "ordersPath": "items",
+    "orderNumberField": "orderId",
+    "statusField": "orderState",
+    "trackingIdField": "shippingInfo.deliveries[0].trackingId",
+    "carrierField": "shippingInfo.deliveries[0].carrier",
+    "statusMapping": {
+      "Complete": "delivered",
+      "Open": "processing",
+      "Confirmed": "processing",
+      "Cancelled": "cancelled"
+    },
+    "paginationScript": "(function(){ var btns = Array.from(document.querySelectorAll('button')); var btn = btns.find(function(b){ return (b.textContent||'').indexOf('WEITERE')!==-1; }); if(btn && !btn.disabled){ btn.click(); return true; } return false; })()"
+  }
+}

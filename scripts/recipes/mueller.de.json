@@ -1,0 +1,69 @@
+{
+  "domain": "mueller.de",
+  "loginType": "email_password",
+  "loginUrl": "https://www.mueller.de/auth/login-register/",
+  "steps": [
+    {
+      "type": "goto",
+      "selector": "https://www.mueller.de/auth/login-register/",
+      "description": "Navigate to mueller.de login page"
+    },
+    {
+      "type": "sleep",
+      "timeout": 5000,
+      "description": "Wait for page to render"
+    },
+    {
+      "type": "jsFill",
+      "value": "{{email}}",
+      "selector": "input[name='username']",
+      "description": "Fill email/username"
+    },
+    {
+      "type": "jsFill",
+      "value": "{{password}}",
+      "selector": "input[name='password']",
+      "description": "Fill password"
+    },
+    {
+      "type": "jsClick",
+      "selector": "button[type='submit']",
+      "value": "Anmelden",
+      "description": "Click Anmelden submit button"
+    },
+    {
+      "type": "sleep",
+      "timeout": 10000,
+      "description": "Wait for login redirect"
+    },
+    {
+      "type": "goto",
+      "selector": "https://www.mueller.de/my-account/orders/",
+      "description": "Navigate to orders page"
+    },
+    {
+      "type": "sleep",
+      "timeout": 5000,
+      "description": "Wait for orders page to render"
+    },
+    {
+      "type": "jsExtract",
+      "description": "Extract orders by fetching detail pages directly"
+    }
+  ],
+  "extractionRules": {"orderId": "", "status": ""},
+  "statusMapping": {
+    "Akzeptiert": "processing",
+    "Versendet": "shipped",
+    "Geliefert": "delivered",
+    "Zugestellt": "delivered",
+    "Storniert": "cancelled",
+    "Retourniert": "returned",
+    "In Bearbeitung": "processing"
+  },
+  "jsExtractConfig": {
+    "extractAllOrders": false,
+    "maxPages": 1,
+    "extractScript": "async function extractOrders(targetOrderIds){var results=[]; var statusMap={'akzeptiert':'processing','versendet':'shipped','geliefert':'delivered','zugestellt':'delivered','storniert':'cancelled','retourniert':'returned','in bearbeitung':'processing'}; for(var i=0;i<targetOrderIds.length;i++){var orderId=targetOrderIds[i]; try{var resp=await fetch('/my-account/orders/'+orderId+'/'); if(!resp.ok){results.push({shopOrderId:orderId,status:null,rawStatus:null,trackingNumber:null,success:false,error:'HTTP '+resp.status}); continue;} var html=await resp.text(); var parser=new DOMParser(); var doc=parser.parseFromString(html,'text/html'); var rawStatus=null; var statusEl=doc.querySelector('span[class*=\"order-status_component\"]'); if(statusEl){rawStatus=(statusEl.textContent||'').trim();} if(!rawStatus){var allEls=doc.querySelectorAll('[class*=\"order-status\"]'); for(var k=0;k<allEls.length;k++){var t=(allEls[k].textContent||'').trim(); if(t&&t.indexOf('Lieferstatus')===-1&&t.length<30){rawStatus=t;break;}}} if(!rawStatus){var bodyText=doc.body?doc.body.textContent||'':''; var sm=bodyText.match(/Lieferstatus\\s*(\\w[\\w\\s]*\\w)/); if(sm) rawStatus=sm[1].trim();} var status=rawStatus?statusMap[rawStatus.toLowerCase()]||rawStatus:null; var tracking=null; var carrier=null; var links=doc.querySelectorAll('a[href]'); for(var j=0;j<links.length;j++){var href=links[j].getAttribute('href')||''; if(href.indexOf('dhl.de')!==-1){carrier='DHL'; var dm=href.match(/piececode=([A-Z0-9]+)/i); if(dm) tracking=dm[1];} if(href.indexOf('dpd.de')!==-1){carrier='DPD'; var dpm=href.match(/parcelno=([A-Z0-9]+)/i); if(dpm) tracking=dpm[1];} if(href.indexOf('hermes')!==-1){carrier='Hermes';} if(href.indexOf('gls-group')!==-1){carrier='GLS';}} if(!tracking){var bodyEl2=doc.body; var textContent2=bodyEl2?bodyEl2.textContent||'':''; var tm=textContent2.match(/Trackingnummer[:\\s]*([A-Z0-9]{8,30})/i); if(tm) tracking=tm[1];} results.push({shopOrderId:orderId,status:status,rawStatus:rawStatus,trackingNumber:tracking,courier:carrier,success:true});} catch(e){results.push({shopOrderId:orderId,status:null,rawStatus:null,trackingNumber:null,success:false,error:e.message});}} return results;} return extractOrders(targetOrderIds);"
+  }
+}

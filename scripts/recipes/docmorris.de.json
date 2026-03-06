@@ -1,0 +1,80 @@
+{
+  "domain": "docmorris.de",
+  "loginType": "email_password",
+  "loginUrl": "https://www.docmorris.de/anmelden",
+  "steps": [
+    {
+      "type": "goto",
+      "selector": "https://www.docmorris.de/anmelden",
+      "description": "Navigate to DocMorris login page"
+    },
+    {
+      "type": "sleep",
+      "timeout": 4000,
+      "description": "Wait for page and CMP cookie overlay to render"
+    },
+    {
+      "type": "jsClick",
+      "selector": "a.cmpboxbtnyes, #cmpbox a.cmpboxbtnyes, .cmpboxbtn.cmpboxbtnyes",
+      "optional": true,
+      "description": "Dismiss CMP cookie consent (OK button is an <a> tag)"
+    },
+    {
+      "type": "sleep",
+      "timeout": 2000,
+      "description": "Wait for cookie overlay to close"
+    },
+    {
+      "type": "jsFill",
+      "value": "{{email}}",
+      "selector": "input[name='username']",
+      "description": "Fill email/username"
+    },
+    {
+      "type": "jsFill",
+      "value": "{{password}}",
+      "selector": "input[name='password']",
+      "description": "Fill password"
+    },
+    {
+      "type": "jsClick",
+      "value": "Anmelden",
+      "selector": "form[method='post'] button[type='submit']",
+      "description": "Click Anmelden submit button"
+    },
+    {
+      "type": "sleep",
+      "timeout": 10000,
+      "description": "Wait for login and reCAPTCHA v3 verification"
+    },
+    {
+      "type": "goto",
+      "selector": "https://www.docmorris.de/konto/bestellungen",
+      "description": "Navigate to orders page"
+    },
+    {
+      "type": "sleep",
+      "timeout": 5000,
+      "description": "Wait for orders page to render"
+    },
+    {
+      "type": "jsExtract",
+      "description": "Extract orders via custom JS"
+    }
+  ],
+  "extractionRules": {"orderId": "", "status": ""},
+  "statusMapping": {
+    "In Bearbeitung": "processing",
+    "Versendet": "shipped",
+    "Geliefert": "delivered",
+    "Zugestellt": "delivered",
+    "Storniert": "cancelled",
+    "Retourniert": "returned"
+  },
+  "jsExtractConfig": {
+    "extractAllOrders": true,
+    "maxPages": 20,
+    "paginationDelay": 3000,
+    "extractScript": "var results=[]; var sections=document.querySelectorAll('main section, main > div > div, [data-testid*=order], [class*=OrderCard], [class*=orderCard], [class*=order-card], [class*=order-item]'); if(sections.length===0) sections=document.querySelectorAll('main > div > div > div'); var processedIds={}; var statusKeywords={'in bearbeitung':'processing','wird bearbeitet':'processing','versendet':'shipped','auf dem weg':'shipped','unterwegs':'shipped','geliefert':'delivered','zugestellt':'delivered','abgeholt':'delivered','storniert':'cancelled','retourniert':'returned','rücksendung':'returned'}; var trackingPatterns=[/(?:Sendungsnummer|Tracking|Paketnummer|Sendungsverfolgung)[:\\s]*([A-Z0-9]{8,30})/gi,/\\b(JJD\\d{16,20})\\b/g,/\\b(0034\\d{16,20})\\b/g]; var carrierPatterns=[/(DHL|Hermes|DPD|GLS|UPS|Deutsche Post)/i]; for(var i=0;i<sections.length;i++){var sec=sections[i]; var text=(sec.textContent||'').trim(); if(text.length<20||text.length>5000) continue; var idMatch=text.match(/(?:Bestellnummer|Bestell-Nr\\.?|Bestellung|Nr\\.)[:\\s#]*([A-Z0-9-]{5,20})/i); if(!idMatch){var numMatch=text.match(/\\b(\\d{7,12})\\b/); if(numMatch && text.toLowerCase().indexOf('bestell')!==-1) idMatch=[null,numMatch[1]];} if(!idMatch) continue; var orderId=idMatch[1]; if(processedIds[orderId]) continue; processedIds[orderId]=true; var textLower=text.toLowerCase(); var status=null; var rawStatus=null; for(var kw in statusKeywords){if(textLower.indexOf(kw)!==-1){status=statusKeywords[kw]; rawStatus=kw; break;}} var tracking=null; var carrier=null; for(var tp=0;tp<trackingPatterns.length;tp++){trackingPatterns[tp].lastIndex=0; var tm=trackingPatterns[tp].exec(text); if(tm){tracking=tm[1]; break;}} for(var cp=0;cp<carrierPatterns.length;cp++){carrierPatterns[cp].lastIndex=0; var cm=carrierPatterns[cp].exec(text); if(cm){carrier=cm[1]; break;}} var dateMatch=text.match(/(?:Lieferung|Zustellung|voraussichtlich|geliefert am)[^\\d]*(\\d{1,2})[.\\/-](\\d{1,2})[.\\/-](\\d{2,4})/i); var deliveryDate=null; if(dateMatch){var dd=dateMatch[1].length===1?'0'+dateMatch[1]:dateMatch[1]; var mm=dateMatch[2].length===1?'0'+dateMatch[2]:dateMatch[2]; var yy=dateMatch[3].length===2?'20'+dateMatch[3]:dateMatch[3]; deliveryDate=yy+'-'+mm+'-'+dd;} var links=sec.querySelectorAll('a[href]'); for(var li=0;li<links.length&&!tracking;li++){var href=links[li].getAttribute('href')||''; var dhlM=href.match(/[?&]idc=([A-Z0-9]+)/i); if(dhlM){tracking=dhlM[1]; carrier='DHL';} var hermesM=href.match(/sendungsnummer[=/]([A-Z0-9]+)/i); if(hermesM){tracking=hermesM[1]; carrier='Hermes';}} results.push({shopOrderId:orderId,status:status,rawStatus:rawStatus,trackingNumber:tracking,courier:carrier,referenceNumber:null,estimatedDeliveryDate:deliveryDate,success:true});} return results;"
+  }
+}

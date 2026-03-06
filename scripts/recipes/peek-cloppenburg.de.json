@@ -1,0 +1,82 @@
+{
+  "domain": "peek-cloppenburg.de",
+  "loginType": "email_password",
+  "loginUrl": "https://www.peek-cloppenburg.de/myaccount/login",
+  "steps": [
+    {
+      "type": "goto",
+      "selector": "https://www.peek-cloppenburg.de/myaccount/login",
+      "description": "Navigate to P&C login page"
+    },
+    {
+      "type": "sleep",
+      "timeout": 4000,
+      "description": "Wait for page and OneTrust cookie banner"
+    },
+    {
+      "type": "jsClick",
+      "selector": "#onetrust-accept-btn-handler",
+      "optional": true,
+      "description": "Dismiss OneTrust cookie consent"
+    },
+    {
+      "type": "sleep",
+      "timeout": 2000,
+      "description": "Wait for cookie banner to close"
+    },
+    {
+      "type": "jsFill",
+      "value": "{{email}}",
+      "selector": "input[name='email']",
+      "description": "Fill email"
+    },
+    {
+      "type": "jsFill",
+      "value": "{{password}}",
+      "selector": "input[name='password']",
+      "description": "Fill password"
+    },
+    {
+      "type": "jsClick",
+      "selector": "button[type='submit']",
+      "value": "anmelden",
+      "description": "Click Jetzt anmelden button"
+    },
+    {
+      "type": "sleep",
+      "timeout": 8000,
+      "description": "Wait for login redirect to /de/myaccount/overview"
+    },
+    {
+      "type": "goto",
+      "selector": "https://www.peek-cloppenburg.de/de/myaccount/orders",
+      "description": "Navigate to orders page (establishes session for API calls)"
+    },
+    {
+      "type": "sleep",
+      "timeout": 5000,
+      "description": "Wait for orders page to render and API session"
+    },
+    {
+      "type": "jsExtract",
+      "description": "Extract orders via P&C REST API (fetch customer-data-2 for userId, then order detail API for each order)"
+    }
+  ],
+  "extractionRules": {"orderId": "", "status": ""},
+  "statusMapping": {
+    "SUBMITTED": "processing",
+    "CONFIRMED": "processing",
+    "IN_DELIVERY": "shipped",
+    "SHIPPED": "shipped",
+    "DELIVERED": "delivered",
+    "CANCELLED": "cancelled",
+    "RETURNED": "returned",
+    "PARTIALLY_RETURNED": "returned",
+    "COMPLETED": "delivered"
+  },
+  "jsExtractConfig": {
+    "extractAllOrders": false,
+    "maxPages": 1,
+    "extractScript": "async function extractOrders(targetOrderIds){var statusMap={'submitted':'processing','confirmed':'processing','in_delivery':'shipped','shipped':'shipped','delivered':'delivered','cancelled':'cancelled','returned':'returned','partially_returned':'returned','completed':'delivered'}; var carrierMap={'DHL_STANDARD':'DHL','DHL_EXPRESS':'DHL Express','DPD':'DPD','HERMES':'Hermes','GLS':'GLS','UPS':'UPS'}; var results=[]; try{var custResp=await fetch('/api/discover/customer-data-2'); if(!custResp.ok) throw new Error('customer-data-2 HTTP '+custResp.status); var custJson=await custResp.json(); var userId=custJson.data&&custJson.data.webShopAccountId; if(!userId) throw new Error('No userId in customer-data-2');  for(var i=0;i<targetOrderIds.length;i++){var orderId=targetOrderIds[i]; try{var apiUrl='/api/fulfill/tenants/PUC_DE/users/'+userId+'/orders/'+orderId+'?returnReservationsEnabled=true'; var resp=await fetch(apiUrl); if(!resp.ok){results.push({shopOrderId:orderId,status:null,rawStatus:null,trackingNumber:null,success:false,error:'API HTTP '+resp.status}); continue;} var json=await resp.json(); var order=json.data&&json.data.order; var orderState=json.data&&json.data.orderState; if(!order){results.push({shopOrderId:orderId,status:null,rawStatus:null,trackingNumber:null,success:false,error:'No order in response'}); continue;} var rawStatus=orderState||order.status||null; var status=rawStatus?statusMap[rawStatus.toLowerCase()]||rawStatus:null; var tracking=null; var carrier=null; var deliveryDate=null; if(order.shipmentCarrier){carrier=carrierMap[order.shipmentCarrier]||order.shipmentCarrier;} if(order.shippingData&&order.shippingData.length>0){var sd=order.shippingData[0]; tracking=sd.trackingId||null; if(sd.deliveryDate){deliveryDate=sd.deliveryDate.substring(0,10);} if(sd.arrivalDate){deliveryDate=sd.arrivalDate.substring(0,10);}} results.push({shopOrderId:orderId,status:status,rawStatus:rawStatus,trackingNumber:tracking,courier:carrier,estimatedDeliveryDate:deliveryDate,success:true});}catch(e){results.push({shopOrderId:orderId,status:null,rawStatus:null,trackingNumber:null,success:false,error:e.message});}}}catch(e){for(var j=0;j<targetOrderIds.length;j++){results.push({shopOrderId:targetOrderIds[j],status:null,rawStatus:null,trackingNumber:null,success:false,error:'Init error: '+e.message});}} return results;} return extractOrders(targetOrderIds);"
+  }
+}
